@@ -2,6 +2,8 @@
 #define FMODSOUND_H
 
 #include "i_sound.h"
+
+#ifndef NO_FMOD
 #include "fmod_wrap.h"
 
 class FMODSoundRenderer : public SoundRenderer
@@ -125,4 +127,5 @@ private:
 	friend class FMODStreamCapsule;
 };
 
+#endif
 #endif
