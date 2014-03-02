@@ -214,8 +214,13 @@ static ALenum FormatFromDesc(int bits, int channels)
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
 #include <gst/app/gstappsink.h>
-#include <gst/app/gstappbuffer.h>
+#if !GST_CHECK_VERSION(1, 0, 0)
 #include <gst/audio/multichannel.h>
+#else
+#include <gst/audio/audio-channels.h>
+#define GST_AUDIO_CHANNEL_POSITION_FRONT_MONO GST_AUDIO_CHANNEL_POSITION_MONO
+#define GST_AUDIO_CHANNEL_POSITION_LFE GST_AUDIO_CHANNEL_POSITION_LFE1
+#endif
 
 /* Bad GStreamer, using enums for bit fields... */
 static GstMessageType operator|(const GstMessageType &a, const GstMessageType &b)
@@ -240,6 +245,7 @@ static GstCaps *SupportedBufferFormatCaps(int forcebits=0)
 {
 	GstStructure *structure;
 	GstCaps *caps;
+	guint64 channel_mask;
 
 	caps = gst_caps_new_empty();
 	if(alIsExtensionPresent("AL_EXT_MCFORMATS"))
@@ -307,13 +313,24 @@ static GstCaps *SupportedBufferFormatCaps(int forcebits=0)
 				if(getALError() != AL_NO_ERROR || val == 0 || val == -1)
 					continue;
 
+#if GST_CHECK_VERSION(1, 0, 0)
+				gst_audio_channel_positions_to_mask(chans[i].pos,
+				    chans[i].count, FALSE, &channel_mask);
+				structure = gst_structure_new("audio/x-raw",
+				    "format", G_TYPE_STRING, GST_AUDIO_NE(F32),
+				    "channel-mask", GST_TYPE_BITMASK, channel_mask,
+				    "layout", G_TYPE_STRING, "interleaved", NULL);
+#else
 				structure = gst_structure_new("audio/x-raw-float",
 				    "endianness", G_TYPE_INT, G_BYTE_ORDER,
 				    "width", G_TYPE_INT, 32, NULL);
+#endif
 				gst_structure_set(structure, "channels", G_TYPE_INT,
 				                  chans[i].count, NULL);
+#if !GST_CHECK_VERSION(1, 0, 0)
 				if(chans[i].count > 2)
 					gst_audio_set_channel_positions(structure, chans[i].pos);
+#endif
 				gst_caps_append_structure(caps, structure);
 			}
 		}
@@ -326,15 +343,26 @@ static GstCaps *SupportedBufferFormatCaps(int forcebits=0)
 			if(getALError() != AL_NO_ERROR || val == 0 || val == -1)
 				continue;
 
+#if GST_CHECK_VERSION(1, 0, 0)
+			gst_audio_channel_positions_to_mask(chans[i].pos,
+			    chans[i].count, FALSE, &channel_mask);
+			structure = gst_structure_new("audio/x-raw",
+			    "format", G_TYPE_STRING, GST_AUDIO_NE(S16),
+			    "channel-mask", GST_TYPE_BITMASK, channel_mask,
+			    "layout", G_TYPE_STRING, "interleaved", NULL);
+#else
 			structure = gst_structure_new("audio/x-raw-int",
 			    "endianness", G_TYPE_INT, G_BYTE_ORDER,
 			    "width", G_TYPE_INT, 16,
 			    "depth", G_TYPE_INT, 16,
 			    "signed", G_TYPE_BOOLEAN, TRUE, NULL);
+#endif
 			gst_structure_set(structure, "channels", G_TYPE_INT,
 			                  chans[i].count, NULL);
+#if !GST_CHECK_VERSION(1, 0, 0)
 			if(chans[i].count > 2)
 				gst_audio_set_channel_positions(structure, chans[i].pos);
+#endif
 			gst_caps_append_structure(caps, structure);
 		}
 		for(size_t i = 0;fmt8[i];i++)
@@ -346,14 +374,24 @@ static GstCaps *SupportedBufferFormatCaps(int forcebits=0)
 			if(getALError() != AL_NO_ERROR || val == 0 || val == -1)
 				continue;
 
+#if GST_CHECK_VERSION(1, 0, 0)
+			gst_audio_channel_positions_to_mask(chans[i].pos,
+			    chans[i].count, FALSE, &channel_mask);
+			structure = gst_structure_new("audio/x-raw",
+			    "format", G_TYPE_STRING, "U8",
+			    "channel-mask", GST_TYPE_BITMASK, channel_mask, NULL);
+#else
 			structure = gst_structure_new("audio/x-raw-int",
 			    "width", G_TYPE_INT, 8,
 			    "depth", G_TYPE_INT, 8,
 			    "signed", G_TYPE_BOOLEAN, FALSE, NULL);
+#endif
 			gst_structure_set(structure, "channels", G_TYPE_INT,
 			                  chans[i].count, NULL);
+#if !GST_CHECK_VERSION(1, 0, 0)
 			if(chans[i].count > 2)
 				gst_audio_set_channel_positions(structure, chans[i].pos);
+#endif
 			gst_caps_append_structure(caps, structure);
 		}
 	}
@@ -362,28 +400,46 @@ static GstCaps *SupportedBufferFormatCaps(int forcebits=0)
 		if(alIsExtensionPresent("AL_EXT_FLOAT32") &&
 		   (!forcebits || forcebits == 32))
 		{
+#if GST_CHECK_VERSION(1, 0, 0)
+			structure = gst_structure_new("audio/x-raw",
+			    "format", G_TYPE_STRING, GST_AUDIO_NE(F32),
+			    "layout", G_TYPE_STRING, "interleaved",
+#else
 			structure = gst_structure_new("audio/x-raw-float",
 			    "endianness", G_TYPE_INT, G_BYTE_ORDER,
 			    "width", G_TYPE_INT, 32,
+#endif
 			    "channels", GST_TYPE_INT_RANGE, 1, 2, NULL);
 			gst_caps_append_structure(caps, structure);
 		}
 		if(!forcebits || forcebits == 16)
 		{
+#if GST_CHECK_VERSION(1, 0, 0)
+			structure = gst_structure_new("audio/x-raw",
+			    "format", G_TYPE_STRING, GST_AUDIO_NE(S16),
+			    "layout", G_TYPE_STRING, "interleaved",
+#else
 			structure = gst_structure_new("audio/x-raw-int",
 			    "endianness", G_TYPE_INT, G_BYTE_ORDER,
 			    "width", G_TYPE_INT, 16,
 			    "depth", G_TYPE_INT, 16,
 			    "signed", G_TYPE_BOOLEAN, TRUE,
+#endif
 			    "channels", GST_TYPE_INT_RANGE, 1, 2, NULL);
 			gst_caps_append_structure(caps, structure);
 		}
 		if(!forcebits || forcebits == 8)
 		{
+#if GST_CHECK_VERSION(1, 0, 0)
+			structure = gst_structure_new("audio/x-raw",
+			    "format", G_TYPE_STRING, "U8",
+			    "layout", G_TYPE_STRING, "interleaved",
+#else
 			structure = gst_structure_new("audio/x-raw-int",
 			    "width", G_TYPE_INT, 8,
 			    "depth", G_TYPE_INT, 8,
 			    "signed", G_TYPE_BOOLEAN, FALSE,
+#endif
 			    "channels", GST_TYPE_INT_RANGE, 1, 2, NULL);
 			gst_caps_append_structure(caps, structure);
 		}
@@ -432,10 +488,17 @@ class OpenALSoundStream : public SoundStream
 		OpenALSoundStream *self = static_cast<OpenALSoundStream*>(user_data);
 
 		// get the buffer from appsink
+#if !GST_CHECK_VERSION(1, 0, 0)
 		GstBuffer *buffer = gst_app_sink_pull_preroll(sink);
 		if(!buffer) return GST_FLOW_ERROR;
 
 		GstCaps *caps = GST_BUFFER_CAPS(buffer);
+#else
+		GstSample *sample = gst_app_sink_pull_preroll(sink);
+		if(!sample) return GST_FLOW_ERROR;
+
+		GstCaps *caps = gst_sample_get_caps(sample);
+#endif
 		gint bits = 0, channels = 0, rate = 0, i;
 		for(i = gst_caps_get_size(caps)-1;i >= 0;i--)
 		{
@@ -451,7 +514,11 @@ class OpenALSoundStream : public SoundStream
 		self->SampleRate = rate;
 		self->Format = FormatFromDesc(bits, channels);
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		gst_buffer_unref(buffer);
+#else
+		gst_sample_unref(sample);
+#endif
 		if(self->Format == AL_NONE || self->SampleRate <= 0)
 			return GST_FLOW_ERROR;
 		return GST_FLOW_OK;
@@ -461,14 +528,33 @@ class OpenALSoundStream : public SoundStream
 	{
 		OpenALSoundStream *self = static_cast<OpenALSoundStream*>(user_data);
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		GstBuffer *buffer = gst_app_sink_pull_buffer(sink);
 		if(!buffer) return GST_FLOW_ERROR;
+#else
+		GstSample *sample = gst_app_sink_pull_sample(sink);
+		if(!sample) return GST_FLOW_ERROR;
+		GstBuffer *buffer = gst_sample_get_buffer(sample);
+		if(!buffer)
+		{
+			gst_sample_unref(sample);
+			return GST_FLOW_ERROR;
+		}
+#endif
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		if(GST_BUFFER_SIZE(buffer) == 0)
 		{
 			gst_buffer_unref(buffer);
 			return GST_FLOW_OK;
 		}
+#else
+		if(gst_buffer_get_size(buffer) == 0)
+		{
+			gst_sample_unref(sample);
+			return GST_FLOW_OK;
+		}
+#endif
 
 		ALint processed, state;
 	next_buffer:
@@ -477,7 +563,11 @@ class OpenALSoundStream : public SoundStream
 			alGetSourcei(self->Source, AL_BUFFERS_PROCESSED, &processed);
 			if(getALError() != AL_NO_ERROR)
 			{
+#if !GST_CHECK_VERSION(1, 0, 0)
 				gst_buffer_unref(buffer);
+#else
+				gst_sample_unref(sample);
+#endif
 				return GST_FLOW_ERROR;
 			}
 			if(processed > 0 || self->SamplesQueued < MaxSamplesQueued ||
@@ -489,7 +579,11 @@ class OpenALSoundStream : public SoundStream
 
 		if(!self->Playing)
 		{
+#if !GST_CHECK_VERSION(1, 0, 0)
 			gst_buffer_unref(buffer);
+#else
+			gst_sample_unref(sample);
+#endif
 			return GST_FLOW_OK;
 		}
 
@@ -499,7 +593,11 @@ class OpenALSoundStream : public SoundStream
 			alGenBuffers(1, &bufID);
 			if(getALError() != AL_NO_ERROR)
 			{
+#if !GST_CHECK_VERSION(1, 0, 0)
 				gst_buffer_unref(buffer);
+#else
+				gst_sample_unref(sample);
+#endif
 				return GST_FLOW_ERROR;
 			}
 			self->Buffers.push_back(bufID);
@@ -509,7 +607,11 @@ class OpenALSoundStream : public SoundStream
 			alSourceUnqueueBuffers(self->Source, 1, &bufID);
 			if(getALError() != AL_NO_ERROR)
 			{
+#if !GST_CHECK_VERSION(1, 0, 0)
 				gst_buffer_unref(buffer);
+#else
+				gst_sample_unref(sample);
+#endif
 				return GST_FLOW_ERROR;
 			}
 
@@ -523,10 +625,22 @@ class OpenALSoundStream : public SoundStream
 			alDeleteBuffers(1, &bufID);
 		}
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		alBufferData(bufID, self->Format, GST_BUFFER_DATA(buffer),
 		             GST_BUFFER_SIZE(buffer), self->SampleRate);
+#else
+		GstMapInfo info;
+		gst_buffer_map(buffer, &info, GST_MAP_READ);
+		alBufferData(bufID, self->Format, info.data,
+		             info.size, self->SampleRate);
+#endif
 		alSourceQueueBuffers(self->Source, 1, &bufID);
+#if !GST_CHECK_VERSION(1, 0, 0)
 		gst_buffer_unref(buffer);
+#else
+		gst_buffer_unmap(buffer, &info);
+		gst_sample_unref(sample);
+#endif
 
 		if(getALError() != AL_NO_ERROR)
 			return GST_FLOW_ERROR;
@@ -560,9 +674,13 @@ class OpenALSoundStream : public SoundStream
 		size = std::min<guint>(size, self->MemData.size() - self->MemDataPos);
 		self->MemDataPos += size;
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		GstBuffer *buffer = gst_buffer_new();
 		GST_BUFFER_DATA(buffer) = data;
 		GST_BUFFER_SIZE(buffer) = size;
+#else
+		GstBuffer *buffer = gst_buffer_new_wrapped_full((GstMemoryFlags)0, data, size, 0, size, NULL, NULL);
+#endif
 
 		// this takes ownership of the buffer; don't unref
 		gst_app_src_push_buffer(appsrc, buffer);
@@ -610,13 +728,25 @@ class OpenALSoundStream : public SoundStream
 		else
 		{
 			buffer = gst_buffer_new_and_alloc(size);
+#if !GST_CHECK_VERSION(1, 0, 0)
 			if(!self->Callback(self, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer), self->UserData))
+#else
+			GstMapInfo info;
+			gst_buffer_map(buffer, &info, GST_MAP_WRITE);
+			if(!self->Callback(self, info.data, info.size, self->UserData))
+#endif
 			{
+#if GST_CHECK_VERSION(1, 0, 0)
+				gst_buffer_unmap(buffer, &info);
+#endif
 				gst_buffer_unref(buffer);
 
 				gst_app_src_end_of_stream(appsrc);
 				return;
 			}
+#if GST_CHECK_VERSION(1, 0, 0)
+			gst_buffer_unmap(buffer, &info);
+#endif
 		}
 
 		gst_app_src_push_buffer(appsrc, buffer);
@@ -680,7 +810,11 @@ class OpenALSoundStream : public SoundStream
 
 	bool PipelineSetup()
 	{
+#if !GST_CHECK_VERSION(1, 0, 0)
 		TagList = gst_tag_list_new();
+#else
+		TagList = gst_tag_list_new_empty();
+#endif
 		g_return_val_if_fail(TagList != NULL, false);
 
 		// Flags (can be combined):
@@ -694,15 +828,20 @@ class OpenALSoundStream : public SoundStream
 		// 0x80: download     - Attempt progressive download buffering
 		int flags = 0x02 | 0x10;
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		gstPipeline = gst_element_factory_make("playbin2", NULL);
+#else
+		gstPipeline = gst_element_factory_make("playbin", NULL);
+#endif
 		g_return_val_if_fail(gstPipeline != NULL, false);
 
-		GstElement *sink = gst_element_factory_make("openalsink", NULL);
+		// GstElement *sink = gst_element_factory_make("openalsink", NULL);
+		GstElement *sink = gst_element_factory_make("autoaudiosink", NULL);
 		if(sink != NULL)
 		{
 			// Give the sink our device, so it can create its own context and
 			// source to play with (and not risk cross-contaminating errors)
-			g_object_set(sink, "device-handle", Renderer->Device, NULL);
+			// g_object_set(sink, "device-handle", Renderer->Device, NULL);
 		}
 		else
 		{
@@ -727,6 +866,9 @@ class OpenALSoundStream : public SoundStream
 		}
 
 		// This takes ownership of the element; don't unref it
+#if GST_CHECK_VERSION(1, 0, 0)
+		g_object_set(sink, "sync", false, NULL);
+#endif
 		g_object_set(gstPipeline, "audio-sink", sink, NULL);
 		g_object_set(gstPipeline, "flags", flags, NULL);
 		return true;
@@ -1007,7 +1149,11 @@ public:
 		gint64 pos;
 
 		// Position will be handled in milliseconds; GStreamer's time format is in nanoseconds
+#if !GST_CHECK_VERSION(1, 0, 0)
 		if(gst_element_query_position(gstPipeline, &format, &pos) && format == GST_FORMAT_TIME)
+#else
+		if(gst_element_query_position(gstPipeline, format, &pos))
+#endif
 			return (unsigned int)(pos / 1000000);
 		return 0;
 	}
@@ -1122,27 +1268,54 @@ public:
 
 		GstStructure *structure;
 		if((flags&Float))
+#if GST_CHECK_VERSION(1, 0, 0)
+			structure = gst_structure_new("audio/x-raw",
+			    "format", G_TYPE_STRING, GST_AUDIO_NE(F32),
+			    "layout", G_TYPE_STRING, "interleaved", NULL);
+#else
 			structure = gst_structure_new("audio/x-raw-float",
 			    "endianness", G_TYPE_INT, G_BYTE_ORDER,
 			    "width", G_TYPE_INT, 32, NULL);
+#endif
 		else if((flags&Bits32))
+#if GST_CHECK_VERSION(1, 0, 0)
+			structure = gst_structure_new("audio/x-raw",
+			    "format", G_TYPE_STRING, GST_AUDIO_NE(S32),
+			    "layout", G_TYPE_STRING, "interleaved", NULL);
+#else
 			structure = gst_structure_new("audio/x-raw-int",
 			    "endianness", G_TYPE_INT, G_BYTE_ORDER,
 			    "width", G_TYPE_INT, 32,
 			    "depth", G_TYPE_INT, 32,
 			    "signed", G_TYPE_BOOLEAN, TRUE, NULL);
+#endif
 		else if((flags&Bits8))
+#if GST_CHECK_VERSION(1, 0, 0)
+			structure = gst_structure_new("audio/x-raw",
+			    "format", G_TYPE_STRING, "S8", NULL);
+#else
 			structure = gst_structure_new("audio/x-raw-int",
 			    "width", G_TYPE_INT, 8,
 			    "depth", G_TYPE_INT, 8,
 			    "signed", G_TYPE_BOOLEAN, TRUE, NULL);
+#endif
 		else
+#if GST_CHECK_VERSION(1, 0, 0)
+			structure = gst_structure_new("audio/x-raw",
+			    "format", G_TYPE_STRING, GST_AUDIO_NE(S16),
+			    "layout", G_TYPE_STRING, "interleaved", NULL);
+#else
 			structure = gst_structure_new("audio/x-raw-int",
 			    "endianness", G_TYPE_INT, G_BYTE_ORDER,
 			    "width", G_TYPE_INT, 16,
 			    "depth", G_TYPE_INT, 16,
 			    "signed", G_TYPE_BOOLEAN, TRUE, NULL);
+#endif
 		gst_structure_set(structure, "channels", G_TYPE_INT, (flags&Mono)?1:2, NULL);
+#if GST_CHECK_VERSION(1, 0, 0)
+		if(!(flags&Mono))
+			gst_structure_set(structure, "channel-mask", GST_TYPE_BITMASK, 0x3, NULL);
+#endif
 		gst_structure_set(structure, "rate", G_TYPE_INT, samplerate, NULL);
 
 		SrcCaps = gst_caps_new_full(structure, NULL);
@@ -1182,9 +1355,13 @@ class Decoder
 		size = (std::min)(size, (guint)(self->MemDataSize - self->MemDataPos));
 		self->MemDataPos += size;
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		GstBuffer *buffer = gst_buffer_new();
 		GST_BUFFER_DATA(buffer) = const_cast<guint8*>(data);
 		GST_BUFFER_SIZE(buffer) = size;
+#else
+		GstBuffer *buffer = gst_buffer_new_wrapped_full((GstMemoryFlags)0, const_cast<guint8*>(data), size, 0, size, NULL, NULL);
+#endif
 
 		gst_app_src_push_buffer(appsrc, buffer);
 	}
@@ -1219,12 +1396,21 @@ class Decoder
 	{
 		Decoder *self = static_cast<Decoder*>(user_data);
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		GstBuffer *buffer = gst_app_sink_pull_preroll(sink);
 		if(!buffer) return GST_FLOW_ERROR;
+#else
+		GstSample *sample = gst_app_sink_pull_preroll(sink);
+		if(!sample) return GST_FLOW_ERROR;
+#endif
 
 		if(self->OutRate == 0)
 		{
+#if !GST_CHECK_VERSION(1, 0, 0)
 			GstCaps *caps = GST_BUFFER_CAPS(buffer);
+#else
+			GstCaps *caps = gst_sample_get_caps(sample);
+#endif
 
 			gint channels = 0, rate = 0, bits = 0, i;
 			for(i = gst_caps_get_size(caps)-1;i >= 0;i--)
@@ -1237,13 +1423,24 @@ class Decoder
 				if(gst_structure_has_field(struc, "width"))
 					gst_structure_get_int(struc, "width", &bits);
 			}
+#if GST_CHECK_VERSION(1, 0, 0)
+			{
+				GstAudioInfo info;
+				gst_audio_info_from_caps(&info, caps);
+				bits = GST_AUDIO_INFO_WIDTH(&info);
+			}
+#endif
 
 			self->OutChannels = channels;
 			self->OutBits = bits;
 			self->OutRate = rate;
 		}
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		gst_buffer_unref(buffer);
+#else
+		gst_sample_unref(sample);
+#endif
 		if(self->OutRate <= 0)
 			return GST_FLOW_ERROR;
 		return GST_FLOW_OK;
@@ -1253,6 +1450,7 @@ class Decoder
 	{
 		Decoder *self = static_cast<Decoder*>(user_data);
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		GstBuffer *buffer = gst_app_sink_pull_buffer(sink);
 		if(!buffer) return GST_FLOW_ERROR;
 
@@ -1263,6 +1461,24 @@ class Decoder
 		memcpy(&self->OutData[pos], GST_BUFFER_DATA(buffer), newsize);
 
 		gst_buffer_unref(buffer);
+#else
+		GstSample *sample = gst_app_sink_pull_sample(sink);
+		if(!sample) return GST_FLOW_ERROR;
+		GstBuffer *buffer = gst_sample_get_buffer(sample);
+		if(!buffer)
+		{
+			gst_sample_unref(sample);
+			return GST_FLOW_ERROR;
+		}
+
+		guint newsize = gst_buffer_get_size(buffer);
+		size_t pos = self->OutData.size();
+		self->OutData.resize(pos+newsize);
+
+		gst_buffer_extract(buffer, 0, &self->OutData[pos], newsize);
+
+		gst_sample_unref(sample);
+#endif
 		return GST_FLOW_OK;
 	}
 
@@ -1271,10 +1487,18 @@ class Decoder
 		if(forcebits && forcebits != 8 && forcebits != 16)
 			return false;
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		TagList = gst_tag_list_new();
+#else
+		TagList = gst_tag_list_new_empty();
+#endif
 		g_return_val_if_fail(TagList != NULL, false);
 
+#if !GST_CHECK_VERSION(1, 0, 0)
 		gstPipeline = gst_element_factory_make("playbin2", NULL);
+#else
+		gstPipeline = gst_element_factory_make("playbin", NULL);
+#endif
 		g_return_val_if_fail(gstPipeline != NULL, false);
 
 		gstSink = gst_element_factory_make("appsink", NULL);
@@ -1566,7 +1790,7 @@ OpenALSoundRenderer::OpenALSoundRenderer()
 	}
 #endif
 
-	if(snd_aldevice != "Default")
+	if(strcmp(snd_aldevice, "Default"))
 	{
 		Device = alcOpenDevice(*snd_aldevice);
 		if(!Device)
@@ -1670,7 +1894,7 @@ OpenALSoundRenderer::OpenALSoundRenderer()
 		Device = NULL;
 		return;
 	}
-	DPrintf("  Allocated "TEXTCOLOR_BLUE"%u"TEXTCOLOR_NORMAL" sources\n", Sources.size());
+	DPrintf("  Allocated "TEXTCOLOR_BLUE"%zu"TEXTCOLOR_NORMAL" sources\n", Sources.size());
 
 	LastWaterAbsorb = 0.0f;
 	if(*snd_efx && alcIsExtensionPresent(Device, "ALC_EXT_EFX"))
@@ -2695,7 +2919,7 @@ void OpenALSoundRenderer::PrintDriversList()
 		return;
 	}
 
-	Printf("%c%s%2d. %s\n", ' ', ((snd_aldevice=="Default") ? TEXTCOLOR_BOLD : ""), 0,
+	Printf("%c%s%2d. %s\n", ' ', ((strcmp(snd_aldevice, "Default") == 0) ? TEXTCOLOR_BOLD : ""), 0,
 	       "Default");
 	for(int i = 1;*drivers;i++)
 	{
