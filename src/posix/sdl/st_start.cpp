@@ -40,6 +40,8 @@
 #include <termios.h>
 
 #include "st_start.h"
+#include "w_wad.h"
+#include "gi.h"
 #include "doomdef.h"
 #include "i_system.h"
 #include "c_cvars.h"
@@ -349,6 +351,110 @@ bool FTTYStartupScreen::NetLoop(bool (*timer_callback)(void *), void *userdata)
 
 void ST_Endoom()
 {
+	int i,j;
+	int att = -1;
+	bool nlflag = false;
+	char *col;
+	char endoom_screen[4000];
+
 	I_ShutdownJoysticks();
+
+	if (showendoom == 0) exit(0);
+
+	if (gameinfo.Endoom[0] == 0)
+	{
+		exit(0);
+	}
+
+	int endoom_lump = Wads.CheckNumForName (gameinfo.Endoom);
+
+	if (endoom_lump < 0 || Wads.LumpLength (endoom_lump) != 4000)
+	{
+		exit(0);
+	}
+
+	if (Wads.GetLumpFile(endoom_lump) == FWadCollection::IWAD_FILENUM && showendoom == 2)
+	{
+		// showendoom==2 means to show only lumps from PWADs.
+		exit(0);
+	}
+
+	Wads.ReadLump (endoom_lump, endoom_screen);
+
+	col = getenv("COLUMNS");
+	if (col)
+	{
+		if (atoi(col) > 80)
+			nlflag = true;
+	} else
+		nlflag = true;
+
+	for (i = 0; i < 80 * 25; i++)
+	{
+		j = endoom_screen[i*2+1];
+		if (j != att)
+		{
+			static const char map[] = "04261537";
+			att = j;
+			printf("\033[0;%s%s3%c;4%cm", (j & 0x80) ? "5;" : "", (j & 0x08) ? "1;" : "", map[j & 7],
+				map[(j & 0x70) >> 4]);
+		}
+
+		switch (endoom_screen[i*2])
+		{
+			case '\x04' :
+				//2666 11100010 10011001 10100110
+				putchar('\xe2');putchar('\x99');putchar('\xa6');
+			break;
+			case '\xb4' :
+				//2524 11100010 10010100 10100100
+				putchar('\xe2');putchar('\x94');putchar('\xa4');
+			break;
+			case '\xc3' :
+				//251c 11100010 10010100 10011100
+				putchar('\xe2');putchar('\x94');putchar('\x9c');
+			break;
+			case '\xc4' :
+				//2500 11100010 10010100 10001000
+				putchar('\xe2');putchar('\x94');putchar('\x80');
+			break;
+			case '\xdb' :
+				//2588 11100010 10010110 10001000
+				putchar('\xe2');putchar('\x96');putchar('\x88');
+			break;
+			case '\xdc' :
+				//2584 11100010 10010110 10000100
+				putchar('\xe2');putchar('\x96');putchar('\x84');
+			break;
+			case '\xdd' :
+				//258c 11100010 10010110 10001100
+				putchar('\xe2');putchar('\x96');putchar('\x8c');
+			break;
+			case '\xde' :
+				//2590 11100010 10010110 10010000
+				putchar('\xe2');putchar('\x96');putchar('\x90');
+			break;
+			case '\xdf' :
+				//2580 11100010 10010110 10000000
+				putchar('\xe2');putchar('\x96');putchar('\x80');
+			break;
+			default:
+				if (endoom_screen[i*2] < 32)
+					putchar('.');
+				else
+					putchar(endoom_screen[i*2]);
+			break;
+		}
+
+		if (nlflag && !((i + 1) % 80))
+		{
+			att = 0;
+			puts("\033[0m");
+		}
+	}
+	printf("\033[0m");
+	if (nlflag)
+		printf("\n");
+
 	exit(0);
 }
