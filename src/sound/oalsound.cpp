@@ -95,6 +95,9 @@ EXTERN_CVAR (Bool, snd_waterreverb)
 EXTERN_CVAR (Bool, snd_pitched)
 
 
+#define MAKE_PTRID(x)  ((void*)(uintptr_t)(x))
+#define GET_PTRID(x)  ((uint32)(uintptr_t)(x))
+
 #define foreach(type, name, vec) \
 	for(std::vector<type>::iterator (name) = (vec).begin(), \
 	    (_end_##name) = (vec).end(); \
@@ -2062,7 +2065,7 @@ void OpenALSoundRenderer::SetSfxVolume(float volume)
 	{
 		if(schan->SysChannel != NULL)
 		{
-			ALuint source = *((ALuint*)schan->SysChannel);
+			ALuint source = GET_PTRID(schan->SysChannel);
 			volume = SfxVolume;
 
 			alcSuspendContext(Context);
@@ -2088,7 +2091,7 @@ unsigned int OpenALSoundRenderer::GetMSLength(SoundHandle sfx)
 {
 	if(sfx.data)
 	{
-		ALuint buffer = *((ALuint*)sfx.data);
+		ALuint buffer = GET_PTRID(sfx.data);
 		if(alIsBuffer(buffer))
 		{
 			ALint bits, channels, freq, size;
@@ -2107,7 +2110,7 @@ unsigned int OpenALSoundRenderer::GetSampleLength(SoundHandle sfx)
 {
 	if(!sfx.data)
 		return 0;
-	return getBufferLength(*((ALuint*)sfx.data));
+	return getBufferLength(GET_PTRID(sfx.data));
 }
 
 float OpenALSoundRenderer::GetOutputRate()
@@ -2181,7 +2184,7 @@ SoundHandle OpenALSoundRenderer::LoadSoundRaw(BYTE *sfxdata, int length, int fre
 		warned = true;
 	}
 
-	retval.data = new ALuint(buffer);
+	retval.data = MAKE_PTRID(buffer);
 	return retval;
 }
 
@@ -2229,7 +2232,7 @@ SoundHandle OpenALSoundRenderer::LoadSound(BYTE *sfxdata, int length)
 		warned = true;
 	}
 
-	retval.data = new ALuint(buffer);
+	retval.data = MAKE_PTRID(buffer);
 	return retval;
 }
 
@@ -2238,14 +2241,15 @@ void OpenALSoundRenderer::UnloadSound(SoundHandle sfx)
 	if(!sfx.data)
 		return;
 
+	ALuint buffer = GET_PTRID(sfx.data);
 	FSoundChan *schan = Channels;
 	while(schan)
 	{
 		if(schan->SysChannel)
 		{
 			ALint bufID = 0;
-			alGetSourcei(*((ALuint*)schan->SysChannel), AL_BUFFER, &bufID);
-			if(bufID == *((ALint*)sfx.data))
+			alGetSourcei(GET_PTRID(schan->SysChannel), AL_BUFFER, &bufID);
+			if((ALuint)bufID == buffer)
 			{
 				FSoundChan *next = schan->NextChan;
 				StopChannel(schan);
@@ -2256,9 +2260,8 @@ void OpenALSoundRenderer::UnloadSound(SoundHandle sfx)
 		schan = schan->NextChan;
 	}
 
-	alDeleteBuffers(1, ((ALuint*)sfx.data));
+	alDeleteBuffers(1, &buffer);
 	getALError();
-	delete ((ALuint*)sfx.data);
 }
 
 short *OpenALSoundRenderer::DecodeSample(int outlen, const void *coded, int sizebytes, ECodecType type)
@@ -2348,8 +2351,8 @@ FISoundChannel *OpenALSoundRenderer::StartSound(SoundHandle sfx, float vol, int 
 			return NULL;
 	}
 
-	ALuint buffer = *((ALuint*)sfx.data);
-	ALuint &source = *find(Sources.begin(), Sources.end(), FreeSfx.back());
+	ALuint buffer = GET_PTRID(sfx.data);
+	ALuint source = FreeSfx.back();
 	alSource3f(source, AL_POSITION, 0.f, 0.f, 0.f);
 	alSource3f(source, AL_VELOCITY, 0.f, 0.f, 0.f);
 	alSource3f(source, AL_DIRECTION, 0.f, 0.f, 0.f);
@@ -2416,8 +2419,8 @@ FISoundChannel *OpenALSoundRenderer::StartSound(SoundHandle sfx, float vol, int 
 	FreeSfx.pop_back();
 
 	FISoundChannel *chan = reuse_chan;
-	if(!chan) chan = S_GetChannel(&source);
-	else chan->SysChannel = &source;
+	if(!chan) chan = S_GetChannel(MAKE_PTRID(source));
+	else chan->SysChannel = MAKE_PTRID(source);
 
 	chan->Rolloff.RolloffType = ROLLOFF_Linear;
 	chan->Rolloff.MaxDistance = 2.f;
@@ -2452,11 +2455,11 @@ FISoundChannel *OpenALSoundRenderer::StartSound3D(SoundHandle sfx, SoundListener
 	float rolloffFactor, gain;
 	bool manualGain = true;
 
-	ALuint buffer = *((ALuint*)sfx.data);
+	ALuint buffer = GET_PTRID(sfx.data);
 	ALint channels = 1;
 	alGetBufferi(buffer, AL_CHANNELS, &channels);
 
-	ALuint &source = *find(Sources.begin(), Sources.end(), FreeSfx.back());
+	ALuint source = FreeSfx.back();
 	alSource3f(source, AL_POSITION, pos[0], pos[1], -pos[2]);
 	alSource3f(source, AL_VELOCITY, vel[0], vel[1], -vel[2]);
 	alSource3f(source, AL_DIRECTION, 0.f, 0.f, 0.f);
@@ -2558,8 +2561,8 @@ FISoundChannel *OpenALSoundRenderer::StartSound3D(SoundHandle sfx, SoundListener
 	FreeSfx.pop_back();
 
 	FISoundChannel *chan = reuse_chan;
-	if(!chan) chan = S_GetChannel(&source);
-	else chan->SysChannel = &source;
+	if(!chan) chan = S_GetChannel(MAKE_PTRID(source));
+	else chan->SysChannel = MAKE_PTRID(source);
 
 	chan->Rolloff = *rolloff;
 	chan->DistanceScale = distscale;
@@ -2574,7 +2577,7 @@ void OpenALSoundRenderer::StopChannel(FISoundChannel *chan)
 	if(chan == NULL || chan->SysChannel == NULL)
 		return;
 
-	ALuint source = *((ALuint*)chan->SysChannel);
+	ALuint source = GET_PTRID(chan->SysChannel);
 	// Release first, so it can be properly marked as evicted if it's being
 	// forcefully killed
 	S_ChannelEnded(chan);
@@ -2598,7 +2601,7 @@ void OpenALSoundRenderer::ChannelVolume(FISoundChannel *chan, float volume)
 {
 	if (chan != NULL && chan->SysChannel != NULL)
 	{
-		ALuint source = *((ALuint*)chan->SysChannel);
+		ALuint source = GET_PTRID(chan->SysChannel);
 
 		alcSuspendContext(Context);
 		if(chan->ManualGain)
@@ -2614,7 +2617,7 @@ unsigned int OpenALSoundRenderer::GetPosition(FISoundChannel *chan)
 		return 0;
 
 	ALint pos;
-	alGetSourcei(*((ALuint*)chan->SysChannel), AL_SAMPLE_OFFSET, &pos);
+	alGetSourcei(GET_PTRID(chan->SysChannel), AL_SAMPLE_OFFSET, &pos);
 	if(getALError() == AL_NO_ERROR)
 		return pos;
 	return 0;
@@ -2693,7 +2696,7 @@ void OpenALSoundRenderer::UpdateSoundParams3D(SoundListener *listener, FISoundCh
 
 	alcSuspendContext(Context);
 
-	ALuint source = *((ALuint*)chan->SysChannel);
+	ALuint source = GET_PTRID(chan->SysChannel);
 	alSource3f(source, AL_POSITION, pos[0], pos[1], -pos[2]);
 	alSource3f(source, AL_VELOCITY, vel[0], vel[1], -vel[2]);
 
@@ -2856,7 +2859,7 @@ float OpenALSoundRenderer::GetAudibility(FISoundChannel *chan)
 	if(chan == NULL || chan->SysChannel == NULL)
 		return 0.f;
 
-	ALuint source = *((ALuint*)chan->SysChannel);
+	ALuint source = GET_PTRID(chan->SysChannel);
 	ALfloat volume = 0.f;
 
 	if(!chan->ManualGain)
@@ -2961,7 +2964,7 @@ void OpenALSoundRenderer::PurgeStoppedSources()
 		FSoundChan *schan = Channels;
 		while(schan)
 		{
-			if(schan->SysChannel != NULL && *i == *((ALuint*)schan->SysChannel))
+			if(schan->SysChannel != NULL && *i == GET_PTRID(schan->SysChannel))
 			{
 				StopChannel(schan);
 				break;
