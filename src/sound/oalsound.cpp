@@ -2377,9 +2377,8 @@ FISoundChannel *OpenALSoundRenderer::StartSound(SoundHandle sfx, float vol, int 
 			alSource3i(source, AL_AUXILIARY_SEND_FILTER, 0, 0, AL_FILTER_NULL);
 		}
 		alSourcef(source, AL_ROOM_ROLLOFF_FACTOR, 0.f);
-		alSourcef(source, AL_PITCH, PITCH(pitch));
 	}
-	else if(WasInWater && !(chanflags&SNDF_NOREVERB))
+	if(WasInWater && !(chanflags&SNDF_NOREVERB))
 		alSourcef(source, AL_PITCH, PITCH(pitch)*PITCH_MULT);
 	else
 		alSourcef(source, AL_PITCH, PITCH(pitch));
@@ -2534,9 +2533,8 @@ FISoundChannel *OpenALSoundRenderer::StartSound3D(SoundHandle sfx, SoundListener
 			alSource3i(source, AL_AUXILIARY_SEND_FILTER, 0, 0, AL_FILTER_NULL);
 		}
 		alSourcef(source, AL_ROOM_ROLLOFF_FACTOR, 0.f);
-		alSourcef(source, AL_PITCH, PITCH(pitch));
 	}
-	else if(WasInWater && !(chanflags&SNDF_NOREVERB))
+	if(WasInWater && !(chanflags&SNDF_NOREVERB))
 		alSourcef(source, AL_PITCH, PITCH(pitch)*PITCH_MULT);
 	else
 		alSourcef(source, AL_PITCH, PITCH(pitch));
@@ -2773,8 +2771,7 @@ void OpenALSoundRenderer::UpdateListener(SoundListener *listener)
 		const_cast<ReverbContainer*>(env)->Modified = false;
 	}
 
-	// NOTE: Moving into and out of water will undo pitch variations on sounds
-	// if either snd_waterreverb or EFX are disabled.
+	// NOTE: Moving into and out of water will undo pitch variations on sounds.
 	if(listener->underwater || env->SoftwareWater)
 	{
 		if(!WasInWater)
@@ -2784,13 +2781,11 @@ void OpenALSoundRenderer::UpdateListener(SoundListener *listener)
 			if(EnvSlot != 0 && *snd_waterreverb)
 			{
 				// Find the "Underwater" reverb environment
-				env = Environments;
-				while(env && env->ID != 0x1600)
-					env = env->Next;
+				env = S_FindEnvironment(0x1600);
 				LoadReverb(env ? env : DefaultEnvironments[0]);
 
-				alFilterf(EnvFilters[0], AL_LOWPASS_GAIN, 0.1f);
-				alFilterf(EnvFilters[0], AL_LOWPASS_GAINHF, 1.f);
+				alFilterf(EnvFilters[0], AL_LOWPASS_GAIN, 1.f);
+				alFilterf(EnvFilters[0], AL_LOWPASS_GAINHF, 0.125f);
 				alFilterf(EnvFilters[1], AL_LOWPASS_GAIN, 1.f);
 				alFilterf(EnvFilters[1], AL_LOWPASS_GAINHF, 1.f);
 
@@ -2801,11 +2796,9 @@ void OpenALSoundRenderer::UpdateListener(SoundListener *listener)
 					alSource3i(*i, AL_AUXILIARY_SEND_FILTER, EnvSlot, 0, EnvFilters[1]);
 				}
 			}
-			else
-			{
-				foreach(ALuint, i, ReverbSfx)
-					alSourcef(*i, AL_PITCH, PITCH_MULT);
-			}
+
+			foreach(ALuint, i, ReverbSfx)
+				alSourcef(*i, AL_PITCH, PITCH_MULT);
 			getALError();
 		}
 	}
@@ -2827,11 +2820,9 @@ void OpenALSoundRenderer::UpdateListener(SoundListener *listener)
 				alSource3i(*i, AL_AUXILIARY_SEND_FILTER, EnvSlot, 0, EnvFilters[1]);
 			}
 		}
-		else
-		{
-			foreach(ALuint, i, ReverbSfx)
-				alSourcef(*i, AL_PITCH, 1.f);
-		}
+
+		foreach(ALuint, i, ReverbSfx)
+			alSourcef(*i, AL_PITCH, 1.f);
 		getALError();
 	}
 }
