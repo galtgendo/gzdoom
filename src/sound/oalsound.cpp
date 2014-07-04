@@ -2041,7 +2041,7 @@ void OpenALSoundRenderer::SetSfxVolume(float volume)
 			alSourcef(source, AL_MAX_GAIN, volume);
 			if(schan->ManualGain)
 				volume *= GetRolloff(&schan->Rolloff, sqrt(schan->DistanceSqr));
-			alSourcef(source, AL_GAIN, volume);
+			alSourcef(source, AL_GAIN, volume * schan->Volume);
 		}
 		schan = schan->NextChan;
 	}
@@ -2135,17 +2135,17 @@ SoundHandle OpenALSoundRenderer::LoadSoundRaw(BYTE *sfxdata, int length, int fre
 		return retval;
 	}
 
-	if(loopstart > 0 && LoopPoints)
+	if((loopstart > 0 || loopend > 0) && LoopPoints)
 	{
 		ALint loops[2] = { 
-			loopstart,
+			loopstart = -1 ? 0 : loopstart,
 			loopend == -1 ? length / (channels*bits/8) : loopend
 		};
 		Printf("Setting loop points %d -> %d\n", loops[0], loops[1]);
 		alBufferiv(buffer, AL_LOOP_POINTS, loops);
 		getALError();
 	}
-	else if(loopstart > 0)
+	else if(loopstart > 0 || loopend > 0)
 	{
 		static bool warned = false;
 		if(!warned)
@@ -2577,10 +2577,9 @@ void OpenALSoundRenderer::ChannelVolume(FISoundChannel *chan, float volume)
 		ALuint source = *((ALuint*)chan->SysChannel);
 
 		alcSuspendContext(Context);
-		alSourcef(source, AL_MAX_GAIN, volume);
 		if(chan->ManualGain)
 			volume *= GetRolloff(&chan->Rolloff, sqrt(chan->DistanceSqr));
-		alSourcef(source, AL_GAIN, volume);
+		alSourcef(source, AL_GAIN, SfxVolume *volume);
 	}
 	getALError();
 }
@@ -2682,7 +2681,7 @@ void OpenALSoundRenderer::UpdateSoundParams3D(SoundListener *listener, FISoundCh
 	if(chan->ManualGain)
 	{
 		float gain = GetRolloff(&chan->Rolloff, sqrt(chan->DistanceSqr));
-		alSourcef(source, AL_GAIN, SfxVolume*gain);
+		alSourcef(source, AL_GAIN, SfxVolume*gain*((FSoundChan*)chan)->Volume);
 	}
 
 	getALError();
@@ -2843,7 +2842,8 @@ float OpenALSoundRenderer::GetAudibility(FISoundChannel *chan)
 	ALfloat volume = 0.f;
 
 	if(!chan->ManualGain)
-		volume = SfxVolume * GetRolloff(&chan->Rolloff, sqrt(chan->DistanceSqr));
+		volume = SfxVolume * ((FSoundChan*)chan)->Volume *
+		         GetRolloff(&chan->Rolloff, sqrt(chan->DistanceSqr));
 	else
 	{
 		alGetSourcef(source, AL_GAIN, &volume);
