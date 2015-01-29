@@ -1,6 +1,6 @@
 // ****************************************************************************
 // * This file is part of the HqMAME project. It is distributed under         *
-// * GNU General Public License: http://www.gnu.org/licenses/gpl.html         *
+// * GNU General Public License: http://www.gnu.org/licenses/gpl-3.0          *
 // * Copyright (C) Zenju (zenju AT gmx DOT de) - All Rights Reserved          *
 // *                                                                          *
 // * Additionally and as a special exception, the author gives permission     *
@@ -13,6 +13,8 @@
 // * do so, delete this exception statement from your version.                *
 // ****************************************************************************
 
+// 2014-11-18 (rogerman):	Update to XBRZ 1.1.
+//
 // 2014-02-06 (rogerman):	Modified for use in DeSmuME by removing C++11 code.
 //							Also integrate xbrz's config.h file into this one.
 
@@ -22,8 +24,9 @@
 #include <cstddef> //size_t
 #include <limits>
 
-#if (defined __cplusplus && __cplusplus >= 201103L)
-#include <cstdint>
+#ifdef _MSC_VER
+typedef __int32 int32_t;
+typedef unsigned __int32 uint32_t;
 #else
 #include <stdint.h> //uint32_t
 #endif
@@ -37,43 +40,49 @@ namespace xbrz
 using a modified approach of xBR:
 http://board.byuu.org/viewtopic.php?f=10&t=2248
 - new rule set preserving small image features
+- highly optimized for performance
+- support alpha channel
 - support multithreading
-- support 64 bit architectures
+- support 64-bit architectures
 - support processing image slices
 */
 
+enum ColorFormat //from high bits -> low bits, 8 bit per channel
+{
+    ColorFormatARGB, //including alpha channel, BGRA byte order on little-endian machines
+    ColorFormatRGB,  //8 bit for each red, green, blue, upper 8 bits unused
+};
+
 /*
 -> map source (srcWidth * srcHeight) to target (scale * width x scale * height) image, optionally processing a half-open slice of rows [yFirst, yLast) only
--> color format: ARGB (BGRA byte order), alpha channel unused
 -> support for source/target pitch in bytes!
--> if your emulator changes only a few image slices during each cycle (e.g. Dosbox) then there's no need to run xBRZ on the complete image:
+-> if your emulator changes only a few image slices during each cycle (e.g. DOSBox) then there's no need to run xBRZ on the complete image:
    Just make sure you enlarge the source image slice by 2 rows on top and 2 on bottom (this is the additional range the xBRZ algorithm is using during analysis)
    Caveat: If there are multiple changed slices, make sure they do not overlap after adding these additional rows in order to avoid a memory race condition
-   if you are using multiple threads for processing each enlarged slice!
+   in the target image data if you are using multiple threads for processing each enlarged slice!
 
 THREAD-SAFETY: - parts of the same image may be scaled by multiple threads as long as the [yFirst, yLast) ranges do not overlap!
-               - there is a minor inefficiency for the first row of a slice, so avoid processing single rows only
-
-
+               - there is a minor inefficiency for the first row of a slice, so avoid processing single rows only; suggestion: process 6 rows at least
 */
 struct ScalerCfg
 {
-	ScalerCfg() :
-	luminanceWeight_(1),
-	equalColorTolerance_(30),
-	dominantDirectionThreshold(3.6),
-	steepDirectionThreshold(2.2),
-	newTestAttribute_(0) {}
+    ScalerCfg() :
+        luminanceWeight_(1),
+        equalColorTolerance_(30),
+        dominantDirectionThreshold(3.6),
+        steepDirectionThreshold(2.2),
+        newTestAttribute_(0) {}
 
-	double luminanceWeight_;
-	double equalColorTolerance_;
-	double dominantDirectionThreshold;
-	double steepDirectionThreshold;
-	double newTestAttribute_; //unused; test new parameters
+    double luminanceWeight_;
+    double equalColorTolerance_;
+    double dominantDirectionThreshold;
+    double steepDirectionThreshold;
+    double newTestAttribute_; //unused; test new parameters
 };
 
 void scale(size_t factor, //valid range: 2 - 5
            const uint32_t* src, uint32_t* trg, int srcWidth, int srcHeight,
+           ColorFormat colFmt,
            const ScalerCfg& cfg = ScalerCfg(),
            int yFirst = 0, int yLast = std::numeric_limits<int>::max()); //slice of source image
 
@@ -90,7 +99,7 @@ void nearestNeighborScale(const uint32_t* src, int srcWidth, int srcHeight, int 
                           SliceType st, int yFirst, int yLast);
 
 //parameter tuning
-bool equalColor(uint32_t col1, uint32_t col2, double luminanceWeight, double equalColorTolerance);
+bool equalColorTest(uint32_t col1, uint32_t col2, ColorFormat colFmt, double luminanceWeight, double equalColorTolerance);
 
 
 

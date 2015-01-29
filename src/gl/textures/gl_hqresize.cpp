@@ -216,7 +216,7 @@ static unsigned char *xBRZHelper(
 	outHeight = N *inHeight;
 
 	unsigned char * newBuffer = new unsigned char[outWidth*outHeight*4];
-	xbrz::scale( N, reinterpret_cast<const unsigned*>(inputBuffer), reinterpret_cast<unsigned*>(newBuffer), inWidth, inHeight );
+	xbrz::scale( N, reinterpret_cast<const unsigned*>(inputBuffer), reinterpret_cast<unsigned*>(newBuffer), inWidth, inHeight, xbrz::ColorFormatARGB );
 	delete[] inputBuffer;
 	return newBuffer;
 }
