@@ -45,12 +45,13 @@ http://board.byuu.org/viewtopic.php?f=10&t=2248
 - support multithreading
 - support 64-bit architectures
 - support processing image slices
+- support scaling up to 6xBRZ
 */
 
 enum ColorFormat //from high bits -> low bits, 8 bit per channel
 {
-    ColorFormatARGB, //including alpha channel, BGRA byte order on little-endian machines
     ColorFormatRGB,  //8 bit for each red, green, blue, upper 8 bits unused
+    ColorFormatARGB, //including alpha channel, BGRA byte order on little-endian machines
 };
 
 /*
@@ -62,25 +63,25 @@ enum ColorFormat //from high bits -> low bits, 8 bit per channel
    in the target image data if you are using multiple threads for processing each enlarged slice!
 
 THREAD-SAFETY: - parts of the same image may be scaled by multiple threads as long as the [yFirst, yLast) ranges do not overlap!
-               - there is a minor inefficiency for the first row of a slice, so avoid processing single rows only; suggestion: process 6 rows at least
+               - there is a minor inefficiency for the first row of a slice, so avoid processing single rows only; suggestion: process 8-16 rows at least
 */
 struct ScalerCfg
 {
     ScalerCfg() :
-        luminanceWeight_(1),
-        equalColorTolerance_(30),
+        luminanceWeight(1),
+        equalColorTolerance(30),
         dominantDirectionThreshold(3.6),
         steepDirectionThreshold(2.2),
-        newTestAttribute_(0) {}
+        newTestAttribute(0) {}
 
-    double luminanceWeight_;
-    double equalColorTolerance_;
+    double luminanceWeight;
+    double equalColorTolerance;
     double dominantDirectionThreshold;
     double steepDirectionThreshold;
-    double newTestAttribute_; //unused; test new parameters
+    double newTestAttribute; //unused; test new parameters
 };
 
-void scale(size_t factor, //valid range: 2 - 5
+void scale(size_t factor, //valid range: 2 - 6
            const uint32_t* src, uint32_t* trg, int srcWidth, int srcHeight,
            ColorFormat colFmt,
            const ScalerCfg& cfg = ScalerCfg(),
