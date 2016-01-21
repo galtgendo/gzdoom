@@ -49,16 +49,14 @@ static inline int yuv_diff(uint32_t yuv1, uint32_t yuv2)
 /* (c1*w1 + c2*w2) >> s */
 static inline uint32_t interp_2px(uint32_t c1, int w1, uint32_t c2, int w2, int s)
 {
-    return (((((c1 & 0xff000000) >> 24) * w1 + ((c2 & 0xff000000) >> 24) * w2) << (24-s)) & 0xff000000) +
-           ((((c1 & 0x0000ff00) * w1 + (c2 & 0x0000ff00) * w2) >> s) & 0x0000ff00) +
+    return ((((((c1 & 0xff00ff00) >> 8) * w1 + ((c2 & 0xff00ff00) >> 8) * w2) >> s) & 0x00ff00ff) << 8) |
            ((((c1 & 0x00ff00ff) * w1 + (c2 & 0x00ff00ff) * w2) >> s) & 0x00ff00ff);
 }
 
 /* (c1*w1 + c2*w2 + c3*w3) >> s */
 static inline uint32_t interp_3px(uint32_t c1, int w1, uint32_t c2, int w2, uint32_t c3, int w3, int s)
 {
-    return (((((c1 & 0xff000000) >> 24) * w1 + ((c2 & 0xff000000) >> 24) * w2 + ((c3 & 0xff000000) >> 24) * w3) << (24-s)) & 0xff000000) +
-           ((((c1 & 0x0000ff00) * w1 + (c2 & 0x0000ff00) * w2 + (c3 & 0x0000ff00) * w3) >>  s) & 0x0000ff00) +
+    return ((((((c1 & 0xff00ff00) >> 8) * w1 + ((c2 & 0xff00ff00) >> 8) * w2 + ((c3 & 0xff00ff00) >> 8) * w3) >>  s) & 0x00ff00ff) << 8) |
            ((((c1 & 0x00ff00ff) * w1 + (c2 & 0x00ff00ff) * w2 + (c3 & 0x00ff00ff) * w3) >>  s) & 0x00ff00ff);
 }
 
@@ -437,9 +435,12 @@ void hqxInit(void)
         const uint32_t r = c >> 16 & 0xff;
         const uint32_t g = c >>  8 & 0xff;
         const uint32_t b = c       & 0xff;
-        const uint32_t y = (uint32_t)( 0.299*r + 0.587*g + 0.114*b);
-        const uint32_t u = (uint32_t)(-0.169*r - 0.331*g +   0.5*b) + 128;
-        const uint32_t v = (uint32_t)(   0.5*r - 0.419*g - 0.081*b) + 128;
+        const uint32_t y = (r + g + b) >> 2;
+        const uint32_t u = 128 + ((r - b) >> 2);
+        const uint32_t v = 128 + ((-r + 2*g -b) >> 3);
+        //const uint32_t y = (uint32_t)( 0.299*r + 0.587*g + 0.114*b);
+        //const uint32_t u = (uint32_t)(-0.169*r - 0.331*g +   0.5*b) + 128;
+        //const uint32_t v = (uint32_t)(   0.5*r - 0.419*g - 0.081*b) + 128;
         rgbtoyuv[c] = (y << 16) + (u << 8) + v;
     }
 
